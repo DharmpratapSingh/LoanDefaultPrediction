@@ -1,5 +1,177 @@
 # Loan Default Prediction Project
 
+[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+A production-ready machine learning project for predicting loan defaults using borrower attributes. This project has been refactored with modular code, proper logging, error handling, and an inference pipeline for real-world deployment.
+
+## 🚀 Quick Start
+
+```bash
+# Install dependencies
+pip install -r requirements.txt
+
+# Train all models
+python -m src.main --mode train
+
+# Make predictions
+python -m src.inference
+```
+
+See [USAGE.md](USAGE.md) for detailed instructions.
+
+## 📁 Project Structure
+
+```
+LoanDefaultPrediction/
+├── config/
+│   └── config.yaml              # Centralized configuration
+├── src/
+│   ├── main.py                  # Main training pipeline
+│   ├── data_preprocessing.py    # Data preprocessing module
+│   ├── model_training.py        # Model training module
+│   ├── evaluation.py            # Model evaluation module
+│   ├── inference.py             # Production inference pipeline
+│   └── utils/
+│       └── logger.py            # Logging utilities
+├── notebooks/
+│   └── LoanDefaultPrediction.ipynb  # Original exploratory notebook
+├── models/                      # Saved model artifacts
+├── logs/                        # Training logs
+├── reports/                     # Evaluation reports & visualizations
+├── requirements.txt             # Python dependencies
+├── README.md                    # This file
+└── USAGE.md                     # Detailed usage guide
+```
+
+## ✨ Key Features
+
+### Production-Ready Code
+- **Modular Architecture**: Clean separation of concerns (preprocessing, training, evaluation, inference)
+- **Error Handling**: Comprehensive try-catch blocks with detailed logging
+- **Configuration Management**: YAML-based configuration for easy experimentation
+- **Logging**: Timestamped logs for debugging and monitoring
+- **Type Hints**: Better code readability and IDE support
+
+### Model Persistence
+- Save and load trained models
+- Persistent preprocessing artifacts (scalers, PCA)
+- Easy model versioning
+
+### Inference Pipeline
+- Single prediction API
+- Batch prediction from CSV
+- Risk categorization (Low/Medium/High)
+- Probability estimates
+
+### Fixed Issues
+- ✅ Resolved deprecated pandas `.fillna(inplace=True)` warnings
+- ✅ Proper error handling throughout
+- ✅ Modular code instead of monolithic notebook
+- ✅ Configuration-driven hyperparameters
+- ✅ Production-ready inference API
+
+## 📊 Model Performance
+
+| Model | Accuracy | Precision | Recall | F1-Score | ROC-AUC |
+|-------|----------|-----------|--------|----------|---------|
+| **Logistic Regression** | 0.86 | 0.86 | 0.86 | 0.86 | **0.92** |
+| **Random Forest** | 0.84 | 0.84 | 0.84 | 0.84 | **0.92** |
+| **XGBoost** | 0.81 | 0.82 | 0.81 | 0.81 | 0.88 |
+| **Lasso Regression** | 0.86 | 0.87 | 0.87 | 0.86 | 0.91 |
+| **Stacking Ensemble** | 0.84 | 0.84 | 0.84 | 0.84 | 0.92 |
+
+## 🔧 Installation
+
+### Requirements
+- Python 3.8+
+- pip
+
+### Setup
+```bash
+# Clone repository
+git clone <repository-url>
+cd LoanDefaultPrediction
+
+# Create virtual environment (recommended)
+python -m venv venv
+source venv/bin/activate  # Windows: venv\Scripts\activate
+
+# Install dependencies
+pip install -r requirements.txt
+```
+
+## 💻 Usage Examples
+
+### Training Models
+```bash
+# Train all models (except neural network)
+python -m src.main --mode train
+
+# Train with neural network
+python -m src.main --mode train --include-neural-net
+
+# Train linear models only
+python -m src.main --mode train_linear
+```
+
+### Making Predictions
+```python
+from src.inference import LoanDefaultPredictor
+
+# Initialize predictor
+predictor = LoanDefaultPredictor(model_name="random_forest")
+
+# Single prediction
+loan_data = {
+    'Age': 30,
+    'Income': 65000,
+    'Home': 'MORTGAGE',
+    'Emp_length': 5.0,
+    'Intent': 'EDUCATION',
+    'Amount': 10000,
+    'Rate': 10.5,
+    'Status': 0,
+    'Percent_income': 0.15,
+    'Cred_length': 5
+}
+
+result = predictor.predict_single(loan_data)
+print(result)
+# {'default': False, 'default_probability': 0.23, 'risk_level': 'Low Risk'}
+
+# Batch predictions
+predictions = predictor.predict_batch("loans.csv", "predictions.csv")
+```
+
+## 📈 What's New in Refactored Version
+
+### Code Quality Improvements
+- Modular Python scripts instead of single notebook
+- Comprehensive error handling and logging
+- Type hints for better code documentation
+- Configuration-driven design
+
+### Production Features
+- Model persistence (save/load)
+- Inference API for real-time predictions
+- Batch prediction pipeline
+- Risk categorization
+
+### Best Practices
+- Virtual environment support
+- `.gitignore` for clean repository
+- Proper package structure
+- Deprecation warnings fixed
+
+## 📖 Documentation
+
+- **[USAGE.md](USAGE.md)** - Comprehensive usage guide
+- **[config/config.yaml](config/config.yaml)** - Configuration reference
+- **notebooks/** - Original exploratory analysis
+
+---
+
 # Introduction
 
 The project focuses on predicting whether a loan will default based on borrower attributes. This classification problem helps financial institutions assess risk and make informed decisions regarding loan approvals.
