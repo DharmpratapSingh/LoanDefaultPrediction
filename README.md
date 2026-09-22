@@ -1,304 +1,178 @@
-# Loan Default Prediction Project
+# Loan Default Prediction
 
-[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+Predicts whether a loan will default, from 8,145 originated loans with borrower and loan
+attributes (age, income, home ownership, employment length, loan intent, amount, rate, loan-to-income
+ratio, prior default on file, credit history length).
 
-A production-ready machine learning project for predicting loan defaults using borrower attributes. This project has been refactored with modular code, proper logging, error handling, and an inference pipeline for real-world deployment.
+Run from the project root:
 
-## 🚀 Quick Start
-
-```bash
-# Install dependencies
+```
 pip install -r requirements.txt
-
-# Train all models
-python -m src.main --mode train
-
-# Make predictions
-python -m src.inference
+python loan_default_analysis.py
 ```
 
-See [USAGE.md](USAGE.md) for detailed instructions.
+Dependencies (verified working set, Python 3.11): numpy 2.3.5, pandas 3.0.2, scikit-learn 1.8.0,
+imbalanced-learn 0.14.1, xgboost 3.2.0, shap 0.51.0 — pinned in
+[`requirements.txt`](requirements.txt).
 
-## 📁 Project Structure
+Everything is in one script: `loan_default_analysis.py`. Full numbers in
+[`results.md`](results.md).
 
-```
-LoanDefaultPrediction/
-├── config/
-│   └── config.yaml              # Centralized configuration
-├── src/
-│   ├── main.py                  # Main training pipeline
-│   ├── data_preprocessing.py    # Data preprocessing module
-│   ├── model_training.py        # Model training module
-│   ├── evaluation.py            # Model evaluation module
-│   ├── inference.py             # Production inference pipeline
-│   └── utils/
-│       └── logger.py            # Logging utilities
-├── notebooks/
-│   └── LoanDefaultPrediction.ipynb  # Original exploratory notebook
-├── models/                      # Saved model artifacts
-├── logs/                        # Training logs
-├── reports/                     # Evaluation reports & visualizations
-├── requirements.txt             # Python dependencies
-├── README.md                    # This file
-└── USAGE.md                     # Detailed usage guide
-```
+## What it does
 
-## ✨ Key Features
+- **Target is `Status`** (1 = default, base rate 21.8%). `Default` (Y/N) is a *feature* — it is a
+  prior-default flag on the applicant's file, not the outcome being predicted.
+- **The split comes first.** Stratified 80/20 at `random_state=42`. Nothing that learns a
+  statistic from the data — imputation, scaling, SMOTE — happens before that line.
+- **One `imblearn.pipeline.Pipeline`** per model: impute → one-hot → scale → (SMOTE) → model, with
+  a `ColumnTransformer` separating numeric from categorical. Using imblearn's Pipeline rather than
+  sklearn's is the whole point: SMOTE fires on training folds only and is skipped automatically at
+  predict time.
+- **Baselines are rows in the table**, not an afterthought: a majority-class `DummyClassifier` and
+  a balanced logistic regression.
+- **Three model families, not six**: logistic regression, random forest, and XGBoost — each run in
+  two configurations (class weights / `scale_pos_weight` vs SMOTE), which is why the table below
+  has seven rows for three families plus the baseline.
 
-### Production-Ready Code
-- **Modular Architecture**: Clean separation of concerns (preprocessing, training, evaluation, inference)
-- **Error Handling**: Comprehensive try-catch blocks with detailed logging
-- **Configuration Management**: YAML-based configuration for easy experimentation
-- **Logging**: Timestamped logs for debugging and monitoring
-- **Type Hints**: Better code readability and IDE support
+## Results
 
-### Model Persistence
-- Save and load trained models
-- Persistent preprocessing artifacts (scalers, PCA)
-- Easy model versioning
+`Precision`, `Recall`, `F1` and `Accuracy` are at each model's own operating threshold (the
+`Threshold` column); `Acc@0.50` is the same model scored at the default 0.50 cut, shown only for
+comparability.
 
-### Inference Pipeline
-- Single prediction API
-- Batch prediction from CSV
-- Risk categorization (Low/Medium/High)
-- Probability estimates
+| Model | Threshold | PR-AUC | ROC-AUC | Precision | Recall | F1 | Accuracy | Acc@0.50 |
+|---|---|---|---|---|---|---|---|---|
+| Majority baseline (Dummy) | 0.500 | 0.2179 | 0.5000 | 0.0000 | 0.0000 | 0.0000 | 0.7821 | 0.7821 |
+| Logistic (class weights) | 0.235 | 0.6262 | 0.8207 | 0.3238 | 0.8901 | 0.4748 | 0.5709 | 0.7551 |
+| Random Forest (class weights) | 0.135 | 0.8032 | 0.8750 | 0.3796 | 0.8704 | 0.5287 | 0.6618 | 0.9042 |
+| **XGBoost (scale_pos_weight)** | **0.195** | **0.8270** | **0.8987** | **0.4213** | **0.8901** | **0.5719** | **0.7096** | **0.8883** |
+| Logistic (SMOTE) | 0.225 | 0.6262 | 0.8221 | 0.3305 | 0.8901 | 0.4821 | 0.5832 | 0.7594 |
+| Random Forest (SMOTE) | 0.190 | 0.8015 | 0.8777 | 0.4228 | 0.8479 | 0.5642 | 0.7145 | 0.9012 |
+| XGBoost (SMOTE) | 0.140 | 0.8216 | 0.8952 | 0.4331 | 0.8761 | 0.5797 | 0.7231 | 0.9024 |
 
-### Fixed Issues
-- ✅ Resolved deprecated pandas `.fillna(inplace=True)` warnings
-- ✅ Proper error handling throughout
-- ✅ Modular code instead of monolithic notebook
-- ✅ Configuration-driven hyperparameters
-- ✅ Production-ready inference API
+PR-AUC floor is the base rate, 0.2179. The majority baseline gets **78% accuracy while catching
+zero defaults** — which is exactly why accuracy is reported last and never led with.
 
-## 📊 Model Performance
+**SMOTE did not beat class weights.** Head-to-head on 5-fold CV PR-AUC over the training set,
+with only the resampling strategy changed: Logistic +0.0004, Random Forest −0.0065, XGBoost
+−0.0091. Every delta is inside its own CV standard deviation. Class weights win on cost and
+determinism.
 
-| Model | Accuracy | Precision | Recall | F1-Score | ROC-AUC |
-|-------|----------|-----------|--------|----------|---------|
-| **Logistic Regression** | 0.86 | 0.86 | 0.86 | 0.86 | **0.92** |
-| **Random Forest** | 0.84 | 0.84 | 0.84 | 0.84 | **0.92** |
-| **XGBoost** | 0.81 | 0.82 | 0.81 | 0.81 | 0.88 |
-| **Lasso Regression** | 0.86 | 0.87 | 0.87 | 0.86 | 0.91 |
-| **Stacking Ensemble** | 0.84 | 0.84 | 0.84 | 0.84 | 0.92 |
+### Why both logistic arms show PR-AUC 0.6262
 
-## 🔧 Installation
+The identical 4dp value in the two logistic rows prompted an audit (STEP 12 of the script). It is
+a rounding coincidence — the arms are independently fitted, all 1,629 test probabilities differ,
+and the metrics separate once unrounded: average precision 0.6261804336 vs 0.6261860054 (5.6e−06
+apart), ROC-AUC 0.8207 vs 0.8221 (1.4e−03 apart).
 
-### Requirements
-- Python 3.8+
-- pip
+The audit surfaced something more useful, though. **For logistic regression, class weighting and
+SMOTE are near rank-equivalent.** Both push toward the same rebalanced prior, and the fitted
+models differ mainly by a coefficient-norm rescale (×1.139) plus a small 8.3-degree rotation
+(cosine similarity 0.9896) — *not* an intercept-only shift; the intercept moves just −0.107. That
+distinction is the point: a pure intercept shift would leave ranking exactly invariant and both
+metrics would match to machine precision. Instead ranking does move slightly (Spearman 0.9972,
+Kendall tau 0.9602, 1.99% discordant pairs, 1,588 of 1,629 ranks differing).
 
-### Setup
-```bash
-# Clone repository
-git clone <repository-url>
-cd LoanDefaultPrediction
+Both PR-AUC and ROC-AUC are ranking-only metrics and both do move. ROC-AUC catches the rotation
+because it averages over all pairs; average precision is top-weighted and the discordance sits
+mid-ranking, so it moved ~250× less. Across 7 split seeds the tau stays at 0.96–0.98 (structural)
+while the 4dp tie shows up in only 2 of 7 (luck of the split). **This is why SMOTE buys nothing
+for the linear model: neither method meaningfully changes the ranking, only the calibration** —
+mean predicted probability 0.390 vs 0.379, both well above the 0.218 base rate. Full table in
+[`results.md`](results.md).
 
-# Create virtual environment (recommended)
-python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
+## The threshold decision
 
-# Install dependencies
-pip install -r requirements.txt
-```
+**Cost ratio FN:FP = 10:1.** A missed default costs unrecovered principal; a false positive costs
+only the interest margin on a good loan you declined. Expected cost = 10·FN + 1·FP.
 
-## 💻 Usage Examples
+The threshold was swept on **training out-of-fold CV predictions**, not on test, then applied to
+the held-out test set unchanged. Chosen: **0.195**.
 
-### Training Models
-```bash
-# Train all models (except neural network)
-python -m src.main --mode train
+| | pred 0 | pred 1 |
+|---|---|---|
+| **actual 0** | TN 840 | FP 434 |
+| **actual 1** | FN 39 | TP 316 |
 
-# Train with neural network
-python -m src.main --mode train --include-neural-net
+Precision 0.421 · Recall 0.890 · Expected cost **824** at 0.195, versus **1,100** at the default
+0.50 — a 25% reduction. Accuracy falls from 0.8883 (the `Acc@0.50` cell above) to 0.7096 in the
+process. That is the trade working as designed, not a regression: at 10:1, buying 316 caught
+defaults for 434 declined good loans is correct.
 
-# Train linear models only
-python -m src.main --mode train_linear
-```
+## `Rate` is target leakage in an underwriting context
 
-### Making Predictions
-```python
-from src.inference import LoanDefaultPredictor
+`Rate` is the single strongest feature (top of the SHAP ranking, mean|SHAP| 0.89). It is also
+**set by the lender's own risk model**. Predicting default from it means feeding the output of a
+risk assessment back in as an input — and at origination, for a genuinely new applicant, the rate
+does not exist yet.
 
-# Initialize predictor
-predictor = LoanDefaultPredictor(model_name="random_forest")
+It is kept in the headline model, with the caveat stated. The sensitivity run without it:
 
-# Single prediction
-loan_data = {
-    'Age': 30,
-    'Income': 65000,
-    'Home': 'MORTGAGE',
-    'Emp_length': 5.0,
-    'Intent': 'EDUCATION',
-    'Amount': 10000,
-    'Rate': 10.5,
-    'Status': 0,
-    'Percent_income': 0.15,
-    'Cred_length': 5
-}
+| | PR-AUC | ROC-AUC |
+|---|---|---|
+| With `Rate` | 0.8270 | 0.8987 |
+| **Without `Rate`** | **0.7446** | **0.8521** |
 
-result = predictor.predict_single(loan_data)
-print(result)
-# {'default': False, 'default_probability': 0.23, 'risk_level': 'Low Risk'}
+Quote the no-Rate row for a pre-origination underwriting model. The with-Rate row is valid only
+for loans that have already been priced — portfolio monitoring, secondary-market pricing.
 
-# Batch predictions
-predictions = predictor.predict_batch("loans.csv", "predictions.csv")
-```
+## Top SHAP findings
 
-## 📈 What's New in Refactored Version
+Ranked by one-hot column, with direction:
 
-### Code Quality Improvements
-- Modular Python scripts instead of single notebook
-- Comprehensive error handling and logging
-- Type hints for better code documentation
-- Configuration-driven design
+1. **`Rate`** (0.890) — higher interest rate pushes toward default
+2. **`Income`** (0.760) — higher income pushes away from default
+3. **`Percent_income`** (0.713) — larger loan as a share of income pushes toward default
+4. **`Home_RENT`** (0.325) — renting pushes toward default
+5. **`Home_OWN`** (0.297) — outright ownership pushes away from default
 
-### Production Features
-- Model persistence (save/load)
-- Inference API for real-time predictions
-- Batch prediction pipeline
-- Risk categorization
+All five carry the economically expected sign. Per-column ranking is not the variable-level
+ranking, though: a multi-level categorical is spread across several one-hot columns, so `Home`
+takes two of the five slots while `Intent` is buried despite being the model's second-strongest
+variable once its columns are summed. Grouped by source variable the order is **Rate (0.890),
+Intent (0.803), Income (0.760), Percent_income (0.713), Home (0.683)**. Either way the conclusion
+about `Default` holds — the prior-default flag the original version used as its *target* scores
+0.168, eighth of ten.
 
-### Best Practices
-- Virtual environment support
-- `.gitignore` for clean repository
-- Proper package structure
-- Deprecation warnings fixed
+## What the original version got wrong
 
-## 📖 Documentation
+The original (`project_code.py`, `LoanDefaultPrediction.ipynb`) reported ROC-AUC up to 0.92 and
+accuracy up to 0.86 across six models, and essentially none of it was measuring what it claimed.
+**It predicted the wrong column**: it took `Default` — a Y/N flag recording whether the applicant
+had a *prior* default on file — as the target, converted it to 1/0, and then left `Status`, the
+actual loan outcome, sitting in the feature matrix (`X = dataset_one_hot.drop(['Id','Default'], axis=1)`).
+So the real outcome was a predictor of a proxy. On top of that, the entire preprocessing chain ran
+**before** `train_test_split`: `Emp_length`/`Rate` were imputed on the full dataset, `MinMaxScaler`
+was fit on the full dataset, SMOTE was applied to the *whole* dataset, and PCA was fit on the
+SMOTE-resampled whole dataset — only then was the data split. That ordering leaks in two
+compounding ways: synthetic minority rows interpolated from training neighbours end up in the test
+set, and the test set was balanced 50/50, so every reported accuracy/precision/recall/F1 is against
+a fabricated class distribution rather than the real 22% base rate. Evaluation was 0.5-threshold
+accuracy and ROC-AUC only, with no PR-AUC, no baseline to beat, and no cost reasoning. The
+neural-net cells passed the test set in as `validation_data`. The model-comparison bar charts were
+built from hard-coded literal metric lists, the second of them (In[31]) still carrying the comment
+`# Update these based on your results` on every metric. And SHAP was run on `X_test_pca` — the
+explanations were of four anonymous principal components, so they could not name a feature at all.
+Six models (logistic, lasso, random forest, XGBoost, SVM, neural net, plus a stacking ensemble)
+were run on this foundation; breadth substituted for rigour.
 
-- **[USAGE.md](USAGE.md)** - Comprehensive usage guide
-- **[config/config.yaml](config/config.yaml)** - Configuration reference
-- **notebooks/** - Original exploratory analysis
+**What changed:** correct target (`Status`) with `Default` demoted to a feature; a single
+stratified split before anything is learned from the data; every transform moved inside an
+imblearn pipeline so SMOTE touches training folds only; PCA dropped so SHAP can name real
+features; three model families instead of six models, each with an explicit imbalance strategy;
+PR-AUC as the headline metric against a stated floor, with a majority-class baseline in the table;
+a threshold chosen against a stated 10:1 cost ratio on out-of-fold training predictions; and every
+number in this README printed by a script that runs end to end. The result is a lower-looking
+ROC-AUC (0.899 vs the original's claimed 0.92) that actually means something.
 
----
+## Sanity checks
 
-# Introduction
-
-The project focuses on predicting whether a loan will default based on borrower attributes. This classification problem helps financial institutions assess risk and make informed decisions regarding loan approvals.
-
-# Problem Statement
-
-Loan default prediction is crucial for minimizing financial risks. The aim is to build a machine learning pipeline that:
-	•	Predicts loan defaults with high precision and recall.
-	•	Handles class imbalance effectively.
-	•	Provides interpretability for decision-making.
-
-Objectives
-	1.	Preprocess the dataset to handle missing values, outliers, and categorical variables.
-	2.	Address class imbalance using SMOTE.
-	3.	Build and evaluate multiple machine learning models:
-  	•	Logistic Regression
-  	•	Lasso Regression
-  	•	Random Forest
-  	•	XGBoost
-  	•	Neural Networks
-  	•	SVM
-	4.	Optimize the best models using hyperparameter tuning.
-	5.	Compare model performance based on evaluation metrics.
-	6.	Provide actionable insights through model interpretability.
-
-# Dataset
-
-Source: [Loan Prediction Dataset](https://www.kaggle.com/datasets/ganjerlawrence/loan-risk-prediction-dataset/data)
-
-The dataset contains information on borrowers and their loans, with attributes such as:
-	•	Numerical Columns: Age, Income, Loan Amount, etc.
-	•	Categorical Columns: Home Ownership, Loan Purpose (Intent).
-	•	Target Column: Default (Yes/No).
-
-Key Statistics:
-	•	Total Records: 8,145
-	•	Class Distribution: Imbalanced (Default = N (majority), Y (minority)).
-
-# Preprocessing Steps
-
-1. Handling Missing Values
-	•	Imputed Emp_length with the mode.
-	•	Imputed Rate with the median.
-
-2. Encoding Categorical Variables
-	•	Applied one-hot encoding to Home and Intent columns:
-	•	Dropped one category for linear models to avoid multicollinearity.
-
-3. Addressing Class Imbalance
-	•	Used SMOTE to oversample the minority class (Default = Y) to balance the dataset.
-
-4. Scaling
-	•	Applied Min-Max Scaling to numerical features to normalize their range.
-
-5. Dimensionality Reduction
-	•	Applied PCA to reduce dimensionality and retain 95% variance.
-
-# Modeling and Evaluation
-
-Trained Models:
-	1.	Logistic Regression
-	2.	Lasso Regression
-	3.	Random Forest
-	4.	XGBoost
-	5.	Neural Networks
-	6.	SVM
-
-Evaluation Metrics:
-	•	Accuracy
-	•	Precision
-	•	Recall
-	•	F1-Score
-	•	ROC-AUC
-
-Key Findings:
-	•	Linear Models:
-	•	Performed better with dataset_linear (avoiding multicollinearity).
-	•	Logistic Regression achieved ROC-AUC = 0.92.
-	•	Non-Linear Models:
-	•	Random Forest and XGBoost outperformed other models.
-	•	Random Forest: ROC-AUC = 0.92.
-	•	XGBoost: ROC-AUC = 0.88.
-	•	Neural Networks:
-	•	Improved after tuning, achieving moderate performance.
-	•	SVM:
-	•	Underperformed compared to other models.
-
-Hyperparameter Tuning
-
-Random Forest:
-	•	Used GridSearchCV to tune n_estimators, max_depth, and other parameters.
-	•	Best ROC-AUC: 0.92.
-
-XGBoost:
-	•	Used RandomizedSearchCV to tune learning_rate, max_depth, subsample, and colsample_bytree.
-	•	Best ROC-AUC: 0.88.
-
-Neural Networks:
-	•	Added dropout layers and batch normalization.
-	•	Optimized learning rate, batch size, and epochs.
-
-# Final Results and Insights
-
-Model	              Accuracy	Precision	Recall	F1-Score	ROC-AUC
-Logistic Regression	0.86	    0.86	    0.86	  0.86	    0.92
-Lasso Regression	  0.86	    0.87	    0.87	  0.86	    0.91
-Random Forest	      0.84	    0.84	    0.84	  0.84	    0.92
-XGBoost	            0.81	    0.82	    0.81	  0.81	    0.88
-Neural Networks	    0.60	    0.60	    0.60	  0.60	    -
-SVM	                0.57	    0.57	    0.57	  0.56	    0.60
-
-Key Insights:
-	1.	Random Forest and XGBoost are the best-performing models.
-	2.	Logistic Regression performed well with dataset_linear, achieving similar ROC-AUC as Random Forest.
-	3.	Neural Networks require further tuning and more data for competitive performance.
-
-# Conclusion
-	•	The Random Forest model is recommended for its balanced performance across all metrics.
-	•	XGBoost is a strong alternative, especially for datasets with complex non-linear patterns.
-	•	Linear models (Logistic, Lasso) are suitable when interpretability is prioritized.
-
-# Future Work
-	1.	Ensemble Models:
-	  •	Combine Random Forest and XGBoost predictions for potential performance gains.
-	2.	Feature Engineering:
-	  •	Explore interaction terms and non-linear transformations.
-	3.	Advanced Neural Networks:
-	  •	Use deep learning frameworks for larger datasets with more features.
-	4.	Explainability:
-	  •	Implement SHAP or LIME to understand feature importance and model behavior.
+Base rate, PR-AUC floor, SMOTE-vs-weights gap, and the ROC-AUC > 0.97 leakage tripwire all pass
+(max ROC-AUC 0.8987, comfortably clear). Two expectation bands were missed by small margins —
+PR-AUC 0.827 against 0.72–0.82, ROC-AUC 0.899 against 0.92–0.95 — and were investigated rather
+than accepted. No feature exceeds a direction-adjusted univariate ROC-AUC of 0.72 against the
+target (adjusted as `max(auc, 1 - auc)`, so `Income`'s raw 0.3198 is correctly read as a
+0.6802-strength inverse signal rather than as weakness); only 8 of 8,145 rows are duplicates; and
+across 5 split seeds the model gives PR-AUC 0.857 ± 0.018 and ROC-AUC 0.920 ± 0.013, with seed 42
+producing the lowest of both. The two misses point in *opposite* directions, which is the opposite
+of a leakage signature. Details in [`results.md`](results.md).
